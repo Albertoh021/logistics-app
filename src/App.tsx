@@ -372,7 +372,7 @@ function App() {
         ) : activeTab === 'insights' ? (
           <InsightsView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
         ) : activeTab === 'previa' ? (
-          <PreviaView records={records} startDate={startDate} endDate={endDate} darkMode={darkMode} />
+          <PreviaView records={records} startDate={startDate} endDate={endDate} darkMode={darkMode} onUpdateRecord={updateRecord} />
         ) : (
           <ConfigView 
             config={googleSheetsConfig} 

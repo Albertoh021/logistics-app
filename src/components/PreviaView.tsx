@@ -8,9 +8,10 @@ interface PreviaViewProps {
   startDate: string;
   endDate: string;
   darkMode: boolean;
+  onUpdateRecord: (id: string, field: keyof LogisticsRecord, value: string | number) => void;
 }
 
-export const PreviaView = ({ records, startDate, endDate, darkMode }: PreviaViewProps) => {
+export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateRecord }: PreviaViewProps) => {
   const [selectedMotorista, setSelectedMotorista] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -229,31 +230,30 @@ export const PreviaView = ({ records, startDate, endDate, darkMode }: PreviaView
                     // O custo veículo não entra aqui porque é custo da empresa.
                     const recebivelDia = r.vlrDasDiarias + r.vlrEntregas + r.bonus + r.vlrColetas + r.vlrSabado + diaPedMudOutros - r.descontos;
                     
+                    const inputClass = `w-20 bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded px-2 py-1 outline-none text-right transition-all ${darkMode ? 'text-slate-200 hover:border-slate-600' : 'text-slate-700'}`;
+                    
+                    const InputNum = ({ field }: { field: keyof LogisticsRecord }) => (
+                      <input
+                        type="number"
+                        value={r[field] === 0 ? '' : Number(r[field])}
+                        onChange={(e) => onUpdateRecord(r.id, field, parseFloat(e.target.value) || 0)}
+                        className={inputClass}
+                        placeholder="0"
+                        step="any"
+                      />
+                    );
+
                     return (
                       <tr key={idx} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
                         <td className={`p-3 pl-4 font-medium ${textValue}`}>{formatDateBR(r.data)}</td>
-                        <td className={`p-3 text-center ${textTitle}`}>{r.entregas}</td>
-                        <td className={`p-3 text-right ${r.vlrEntregas > 0 ? (darkMode ? 'text-indigo-400' : 'text-indigo-600') : textTitle}`}>
-                          {r.vlrEntregas > 0 ? formatCurrency(r.vlrEntregas) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${textTitle}`}>
-                          {r.vlrDasDiarias > 0 ? formatCurrency(r.vlrDasDiarias) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${r.bonus > 0 ? (darkMode ? 'text-amber-400' : 'text-amber-600') : textTitle}`}>
-                          {r.bonus > 0 ? formatCurrency(r.bonus) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${textTitle}`}>
-                          {r.vlrColetas > 0 ? formatCurrency(r.vlrColetas) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${textTitle}`}>
-                          {r.vlrSabado > 0 ? formatCurrency(r.vlrSabado) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${textTitle}`}>
-                          {diaPedMudOutros > 0 ? formatCurrency(diaPedMudOutros) : '-'}
-                        </td>
-                        <td className={`p-3 text-right ${r.descontos > 0 ? (darkMode ? 'text-red-400' : 'text-red-500') : textTitle}`}>
-                          {r.descontos > 0 ? `-${formatCurrency(r.descontos)}` : '-'}
-                        </td>
+                        <td className="p-3 text-center"><InputNum field="entregas" /></td>
+                        <td className="p-3 text-right"><InputNum field="vlrEntregas" /></td>
+                        <td className="p-3 text-right"><InputNum field="vlrDiaria" /></td>
+                        <td className="p-3 text-right"><InputNum field="bonus" /></td>
+                        <td className="p-3 text-right"><InputNum field="vlrColetas" /></td>
+                        <td className="p-3 text-right"><InputNum field="vlrSabado" /></td>
+                        <td className="p-3 text-right"><InputNum field="outrosValores" /></td>
+                        <td className="p-3 text-right"><InputNum field="descontos" /></td>
                         <td className={`p-3 pr-4 text-right font-bold ${
                           recebivelDia >= 0 ? (darkMode ? 'text-emerald-400' : 'text-emerald-600') : (darkMode ? 'text-red-400' : 'text-red-500')
                         }`}>
