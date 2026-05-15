@@ -12,7 +12,7 @@ import { DriverPerformanceView } from './components/DriverPerformanceView';
 import { ConfigView } from './components/ConfigView';
 import { PreviaView } from './components/PreviaView';
 import { fetchGoogleSheetsData } from './services/googleSheets';
-import { Settings, Receipt } from 'lucide-react';
+import { Settings, Receipt, RefreshCw } from 'lucide-react';
 
 const INITIAL_DATA: LogisticsRecord[] = [];
 
@@ -25,6 +25,7 @@ const INITIAL_COSTS: GlobalCosts = {
 
 function App() {
   const [activeTab, setActiveTab] = useState<'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa'>('spreadsheet');
+  const [isSyncing, setIsSyncing] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [startDate, setStartDate] = useState(() => localStorage.getItem('logistics_start_date') || '');
   const [endDate, setEndDate] = useState(() => localStorage.getItem('logistics_end_date') || '');
@@ -172,8 +173,13 @@ function App() {
   };
 
   const handleSyncGoogleSheets = async () => {
-    const fetchedRecords = await fetchGoogleSheetsData(googleSheetsConfig);
-    setRecords(fetchedRecords);
+    setIsSyncing(true);
+    try {
+      const fetchedRecords = await fetchGoogleSheetsData(googleSheetsConfig);
+      setRecords(fetchedRecords);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const filteredRecords = useMemo(() => {
@@ -308,15 +314,16 @@ function App() {
             Prévia
           </button>
           <button 
-            onClick={() => setActiveTab('config')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'config' 
-                ? (darkMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-md') 
-                : (darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')
+            onClick={handleSyncGoogleSheets}
+            disabled={isSyncing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-md ${
+              darkMode 
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50' 
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50'
             }`}
           >
-            <Settings size={18} />
-            Configurações
+            <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
           </button>
           
           {startDate || endDate ? (
