@@ -1,5 +1,6 @@
 export interface LogisticsRecord {
   id: string;
+  data: string; // YYYY-MM-DD
   motorista: string;
   tipoContrato: string;
   veiculo: string;
@@ -20,6 +21,7 @@ export interface LogisticsRecord {
   pedagio: number;
   mudanca: number;
   outrosValores: number;
+  custoVeiculo: number;
   descontos: number;
   
   // Compute
@@ -35,6 +37,15 @@ export interface LogisticsRecord {
   cep: string;
   pctColetados: number;
   pctPorPonto: number;
+}
+
+export interface GoogleSheetsConfig {
+  urlContratos: string;
+  urlEntregas: string;
+  urlColetas: string;
+  urlVeiculosDiario: string;
+  urlVeiculosPrevia: string;
+  urlLancamentos: string;
 }
 
 export interface GlobalCosts {

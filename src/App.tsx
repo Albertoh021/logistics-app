@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import Papa from 'papaparse';
-import type { LogisticsRecord, GlobalCosts } from './types';
+import type { LogisticsRecord, GlobalCosts, GoogleSheetsConfig } from './types';
 import { generateId } from './utils';
 import { DashboardHeader } from './components/DashboardHeader';
 import { Toolbar } from './components/Toolbar';
@@ -10,6 +9,10 @@ import { SummaryView } from './components/SummaryView';
 import { ColetaAnalysisView } from './components/ColetaAnalysisView';
 import { InsightsView } from './components/InsightsView';
 import { DriverPerformanceView } from './components/DriverPerformanceView';
+import { ConfigView } from './components/ConfigView';
+import { PreviaView } from './components/PreviaView';
+import { fetchGoogleSheetsData } from './services/googleSheets';
+import { Settings, Receipt } from 'lucide-react';
 
 const INITIAL_DATA: LogisticsRecord[] = [];
 
@@ -21,9 +24,23 @@ const INITIAL_COSTS: GlobalCosts = {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance'>('spreadsheet');
+  const [activeTab, setActiveTab] = useState<'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa'>('spreadsheet');
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
-  const [dateRange, setDateRange] = useState(() => localStorage.getItem('logistics_date_range') || '');
+  const [startDate, setStartDate] = useState(() => localStorage.getItem('logistics_start_date') || '');
+  const [endDate, setEndDate] = useState(() => localStorage.getItem('logistics_end_date') || '');
+  
+  const [googleSheetsConfig, setGoogleSheetsConfig] = useState<GoogleSheetsConfig>(() => {
+    const saved = localStorage.getItem('logistics_gs_config');
+    if (saved) return JSON.parse(saved);
+    return {
+      urlContratos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQqrB9Vyai3BbY6qNgReC91xpD4ZETXN3s273e1bY_9ysp_78U4boSvLaQjBgtGgUKlqXJBB8bdRk2w/pub?gid=371113084&single=true&output=csv',
+      urlEntregas: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsJ46qpuqVO3VvQLp9R3sLBJe7a5vLu02ae9nox4hyc4t9rnUAr74B3fqCA5dRmGyt6rDcuogbwvvU/pub?gid=0&single=true&output=csv',
+      urlColetas: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQp8ZBJdS-SiRZQgUpUuycrORfLC1JzzkIjz2aGLqFELs9qbg1RMLPWdFtgmvaC6UuGt1SVKPv6ysC3/pub?gid=0&single=true&output=csv',
+      urlVeiculosDiario: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQybI5KTowf4OiZci5-hCkN7iX4nx0ZVS1oFxOB9H2Bxm8Um4z3tiqtn9lhvl4iByxISR3Hr4qxxTx0/pub?gid=360491932&single=true&output=csv',
+      urlVeiculosPrevia: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQybI5KTowf4OiZci5-hCkN7iX4nx0ZVS1oFxOB9H2Bxm8Um4z3tiqtn9lhvl4iByxISR3Hr4qxxTx0/pub?gid=1596383573&single=true&output=csv',
+      urlLancamentos: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRHmPtIj7ccCzVnHw_K0hrDKsCktaxGGCnqGzNY-yX1cUHuq3tndCwF31SznXJJH_xfTVpFkgHNblZp/pub?gid=0&single=true&output=csv',
+    };
+  });
   
   const [records, setRecords] = useState<LogisticsRecord[]>(() => {
     const saved = localStorage.getItem('logistics_records_v2');
@@ -68,10 +85,16 @@ function App() {
     localStorage.setItem('logistics_records_v2', JSON.stringify(records));
   }, [records]);
 
-  // Persist date range
+  // Persist dates
   useEffect(() => {
-    localStorage.setItem('logistics_date_range', dateRange);
-  }, [dateRange]);
+    localStorage.setItem('logistics_start_date', startDate);
+    localStorage.setItem('logistics_end_date', endDate);
+  }, [startDate, endDate]);
+
+  // Persist google sheets config
+  useEffect(() => {
+    localStorage.setItem('logistics_gs_config', JSON.stringify(googleSheetsConfig));
+  }, [googleSheetsConfig]);
 
   // Persist global costs
   useEffect(() => {
@@ -109,7 +132,9 @@ function App() {
       regiaoEntrega: '',
       cep: '',
       pctColetados: 0,
-      pctPorPonto: 0
+      pctPorPonto: 0,
+      data: '',
+      custoVeiculo: 0
     };
     setRecords([newRecord, ...records]);
     setActiveTab('spreadsheet');
@@ -144,207 +169,27 @@ function App() {
 
   const clearAllRecords = () => {
     setRecords([]);
-    setDateRange('');
   };
 
-  const exportToCSV = () => {
-    if (records.length === 0) return;
-
-    const headers = [
-      'Motorista', 'Tipo Contrato', 'Veículo', 'Operação', 'Vlr Diária', 'Dias Trabalhados', 
-      'Entregas', 'Valor Faturado', 'Insucessos', 'Vlr das Diárias', 'Vlr Entregas', 'Bônus', 
-      'Coletas', 'Vlr Coletas', 'Vlr Sábado', 'Pedágio', 'Mudança', 'Outros Valores', 'Descontos', 
-      'Vlr Total', 'Tck Médio', 'Lucro Bruto', '% Custo', 'Entregas/Dia', 'Coletas/Dia', 
-      'Região de Entrega', 'CEP', 'Pct Coletados', 'Pct Por Ponto'
-    ];
-    
-    // Export what's visible in filters
-    const rows = filteredRecords.map(r => [
-      r.motorista, r.tipoContrato, r.veiculo, r.operacao, r.vlrDiaria, r.diasTrabalhados,
-      r.entregas, r.valorFaturado, r.insucessos, r.vlrDasDiarias, r.vlrEntregas, r.bonus,
-      r.coletas, r.vlrColetas, r.vlrSabado, r.pedagio, r.mudanca, r.outrosValores, r.descontos,
-      r.vlrTotal, r.tckMedio, r.lucroBruto, r.pctCusto, r.entregasDia, r.coletasDia,
-      r.regiaoEntrega, r.cep, r.pctColetados, r.pctPorPonto
-    ]);
-
-    const csvContent = '\uFEFF' + [
-      headers.join(';'),
-      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `analise_custos_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const importCSV = (file: File) => {
-    Papa.parse(file, {
-      header: false,
-      skipEmptyLines: true,
-      complete: function(results) {
-        const rows = results.data as string[][];
-
-        // Attempt to find Date Range at the top of the CSV
-        let foundDateRange = '';
-        const dateRegex = /De\s*\d{2}[\/\-]\d{2}[\/\-](?:\d{4}|\d{2})\s*(?:a|à|ate|até)\s*\d{2}[\/\-]\d{2}[\/\-](?:\d{4}|\d{2})/i;
-        for (let i = 0; i < Math.min(15, rows.length); i++) {
-          if (!rows[i]) continue;
-          for (const cell of rows[i]) {
-            if (cell && typeof cell === 'string') {
-              const match = cell.match(dateRegex);
-              if (match) {
-                // capitalize the first letter just in case it's lowercased
-                const rawDate = match[0];
-                foundDateRange = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
-                break;
-              }
-            }
-          }
-          if (foundDateRange) break;
-        }
-
-        let headerRowIndex = -1;
-        let headers: string[] = [];
-        for (let i = 0; i < rows.length; i++) {
-          const rowData = rows[i] ? rows[i].map(c => 
-            String(c).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\uFFFD/g, 'a')
-          ) : [];
-          if (rowData.includes('motorista') || rowData.includes('nome do motorista') || rowData.includes('nome')) {
-            headerRowIndex = i;
-            headers = rowData;
-            break;
-          }
-        }
-
-        if (headerRowIndex === -1) {
-          alert('Não foi possível encontrar a coluna "Motorista" no CSV. Verifique a planilha.');
-          return;
-        }
-
-        const findColIdx = (aliases: string[]) => {
-          for (const alias of aliases) {
-            const idx = headers.findIndex(h => h === alias.toLowerCase() || h.includes(alias.toLowerCase()));
-            if (idx !== -1) return idx;
-          }
-          return -1;
-        };
-
-        const colMap = {
-          motorista: findColIdx(['motorista', 'nome']),
-          tipoContrato: findColIdx(['tipo contrato', 'contrato']),
-          veiculo: findColIdx(['veiculo', 'carro', 'placa', 'veaculo']),
-          operacao: findColIdx(['operacao', 'tipo de operacao', 'tipo operacao', 'operaaao', 'operaao']),
-          vlrDiaria: findColIdx(['vlr diaria', 'valor diaria', 'valor da diaria', 'diaria', 'vlr diaaria', 'valor diaaria', 'diaaria']),
-          diasTrabalhados: findColIdx(['dias trabalhados', 'dias']),
-          entregas: findColIdx(['entregas', 'qtd entregas']),
-          valorFaturado: findColIdx(['valor faturado', 'faturamento']),
-          insucessos: findColIdx(['insucessos']),
-          vlrEntregas: findColIdx(['vlr entregas', 'vlr das entregas']),
-          bonus: findColIdx(['bônus', 'bonus']),
-          coletas: findColIdx(['coletas', 'qtd coletas']),
-          vlrColetas: findColIdx(['vlr coletas', 'valor coletas']),
-          vlrSabado: findColIdx(['vlr sábado', 'vlr sabado']),
-          pedagio: findColIdx(['pedágio', 'pedagio']),
-          mudanca: findColIdx(['mudança', 'mudanca']),
-          outrosValores: findColIdx(['outros valores', 'hr parada', 'outros']),
-          descontos: findColIdx(['descontos', 'desconto']),
-          regiaoEntrega: findColIdx(['região', 'regiao']),
-          cep: findColIdx(['cep']),
-          pctColetados: findColIdx(['pct coletados', '% coletados']),
-          pctPorPonto: findColIdx(['pct por ponto', '% por ponto']),
-        };
-
-        const parsedRecords: LogisticsRecord[] = [];
-
-        for (let i = headerRowIndex + 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row) continue;
-
-          const motoristaName = colMap.motorista !== -1 ? String(row[colMap.motorista] || '').trim().replace(/\uFFFD/g, 'A') : '';
-          
-          if (!motoristaName || motoristaName.toLowerCase().includes('total') || motoristaName === '-') {
-            continue;
-          }
-
-          const getStr = (idx: number) => {
-            if (idx !== -1 && row[idx]) {
-               return String(row[idx]).trim().replace(/\uFFFD/g, 'A');
-            }
-            return '';
-          };
-
-          const parseNum = (idx: number) => {
-            if (idx === -1) return 0;
-            const raw = row[idx] ? String(row[idx]) : '';
-            let clean = raw.replace(/R\$\s?/, '').replace(/%/, '').trim();
-            if (!clean || clean === '-') return 0;
-            
-            if (clean.includes(',') && clean.includes('.')) {
-                clean = clean.replace(/\./g, '').replace(',', '.');
-            } else if (clean.includes(',') && !clean.includes('.')) {
-                clean = clean.replace(',', '.');
-            }
-            return parseFloat(clean) || 0;
-          };
-
-          const motorista = motoristaName;
-          const tipoContrato = getStr(colMap.tipoContrato);
-          const veiculo = getStr(colMap.veiculo);
-          const operacao = getStr(colMap.operacao);
-          
-          const vlrDiaria = parseNum(colMap.vlrDiaria);
-          const diasTrabalhados = parseNum(colMap.diasTrabalhados);
-          const entregas = parseNum(colMap.entregas);
-          const valorFaturado = parseNum(colMap.valorFaturado);
-          const insucessos = parseNum(colMap.insucessos);
-          const vlrEntregas = parseNum(colMap.vlrEntregas);
-          const bonus = parseNum(colMap.bonus);
-          const coletas = parseNum(colMap.coletas);
-          const vlrColetas = parseNum(colMap.vlrColetas);
-          const vlrSabado = parseNum(colMap.vlrSabado);
-          const pedagio = parseNum(colMap.pedagio);
-          const mudanca = parseNum(colMap.mudanca);
-          const outrosValores = parseNum(colMap.outrosValores);
-          const descontos = parseNum(colMap.descontos);
-          const regiaoEntrega = getStr(colMap.regiaoEntrega);
-          const cep = getStr(colMap.cep);
-          const pctColetados = parseNum(colMap.pctColetados);
-          const pctPorPonto = parseNum(colMap.pctPorPonto);
-
-          const vlrDasDiarias = vlrDiaria * diasTrabalhados;
-          const vlrTotal = vlrDasDiarias + vlrEntregas + bonus + vlrColetas + vlrSabado + pedagio + mudanca + outrosValores - descontos;
-          const tckMedio = entregas > 0 ? (vlrTotal / entregas) : 0;
-          const lucroBruto = valorFaturado - vlrTotal;
-          const pctCusto = valorFaturado > 0 ? (vlrTotal / valorFaturado) * 100 : 0;
-          const entregasDia = diasTrabalhados > 0 ? (entregas / diasTrabalhados) : 0;
-          const coletasDia = diasTrabalhados > 0 ? (coletas / diasTrabalhados) : 0;
-          
-          parsedRecords.push({
-            id: generateId(),
-            motorista, tipoContrato, veiculo, operacao, vlrDiaria, diasTrabalhados,
-            entregas, valorFaturado, insucessos, vlrDasDiarias, vlrEntregas, bonus,
-            coletas, vlrColetas, vlrSabado, pedagio, mudanca, outrosValores, descontos,
-            vlrTotal, tckMedio, lucroBruto, pctCusto, entregasDia, coletasDia,
-            regiaoEntrega, cep, pctColetados, pctPorPonto
-          });
-        }
-
-        if (foundDateRange) {
-          setDateRange(foundDateRange);
-        }
-        setRecords(prev => [...parsedRecords, ...prev]);
-        setActiveTab('spreadsheet');
-      }
-    });
+  const handleSyncGoogleSheets = async () => {
+    const fetchedRecords = await fetchGoogleSheetsData(googleSheetsConfig);
+    setRecords(fetchedRecords);
   };
 
   const filteredRecords = useMemo(() => {
     let result = records;
+
+    // Apply date range filter
+    if (startDate || endDate) {
+      result = result.filter(r => {
+        if (!r.data) return true; // If somehow there's no date, include it or exclude it?
+        
+        const rDate = r.data;
+        if (startDate && rDate < startDate) return false;
+        if (endDate && rDate > endDate) return false;
+        return true;
+      });
+    }
 
     if (searchQuery.trim()) {
       const lowerQuery = searchQuery.toLowerCase();
@@ -368,8 +213,47 @@ function App() {
       return true;
     });
 
+    // Aggregate by motorista
+    const aggregated = new Map<string, LogisticsRecord>();
+    
+    result.forEach(r => {
+      if (aggregated.has(r.motorista)) {
+        const existing = aggregated.get(r.motorista)!;
+        existing.diasTrabalhados += r.diasTrabalhados;
+        existing.entregas += r.entregas;
+        existing.valorFaturado += r.valorFaturado;
+        existing.insucessos += r.insucessos;
+        existing.vlrEntregas += r.vlrEntregas;
+        existing.bonus += r.bonus;
+        existing.coletas += r.coletas;
+        existing.vlrColetas += r.vlrColetas;
+        existing.vlrSabado += r.vlrSabado;
+        existing.pedagio += r.pedagio;
+        existing.mudanca += r.mudanca;
+        existing.outrosValores += r.outrosValores;
+        existing.custoVeiculo += r.custoVeiculo;
+        existing.descontos += r.descontos;
+      } else {
+        aggregated.set(r.motorista, { ...r });
+      }
+    });
+
+    result = Array.from(aggregated.values());
+
+    // Recalculate derived fields for aggregated records
+    result = result.map(r => {
+      r.vlrDasDiarias = r.vlrDiaria * r.diasTrabalhados;
+      r.vlrTotal = r.vlrDasDiarias + r.vlrEntregas + r.bonus + r.vlrColetas + r.vlrSabado + r.pedagio + r.mudanca + r.outrosValores + r.custoVeiculo - r.descontos;
+      r.lucroBruto = r.valorFaturado - r.vlrTotal;
+      r.tckMedio = r.entregas > 0 ? r.vlrTotal / r.entregas : 0;
+      r.pctCusto = r.valorFaturado > 0 ? (r.vlrTotal / r.valorFaturado) * 100 : 0;
+      r.entregasDia = r.diasTrabalhados > 0 ? (r.entregas / r.diasTrabalhados) : 0;
+      r.coletasDia = r.diasTrabalhados > 0 ? (r.coletas / r.diasTrabalhados) : 0;
+      return r;
+    });
+
     return result;
-  }, [records, searchQuery, columnFilters]);
+  }, [records, searchQuery, columnFilters, startDate, endDate]);
 
   // Set column filter
   const toggleColumnFilter = (field: keyof LogisticsRecord, value: string) => {
@@ -411,15 +295,40 @@ function App() {
               <p className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>Sistema de Custos Logísticos da Frota</p>
             </div>
           </div>
+
+          <button 
+            onClick={() => setActiveTab('previa')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'previa' 
+                ? (darkMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-md') 
+                : (darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')
+            }`}
+          >
+            <Receipt size={18} />
+            Prévia
+          </button>
+          <button 
+            onClick={() => setActiveTab('config')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              activeTab === 'config' 
+                ? (darkMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-blue-600 text-white shadow-md') 
+                : (darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100')
+            }`}
+          >
+            <Settings size={18} />
+            Configurações
+          </button>
           
-          {dateRange && (
+          {startDate || endDate ? (
             <div className={`px-4 py-2 ${darkMode ? 'bg-slate-800 border-slate-700 text-blue-400' : 'bg-white border-slate-200 text-blue-700'} border rounded-xl shadow-sm flex items-center`}>
               <span className="mr-2 text-lg">📅</span>
               <span className="font-semibold tracking-wide" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {dateRange}
+                Período: {startDate ? new Date(startDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Início'} 
+                {' até '} 
+                {endDate ? new Date(endDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : 'Hoje'}
               </span>
             </div>
-          )}
+          ) : null}
         </header>
 
         {activeTab === 'spreadsheet' && (
@@ -430,9 +339,11 @@ function App() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           onAddRow={addRecord}
-          onExport={exportToCSV}
-          onImport={importCSV}
           onClearAll={clearAllRecords}
+          startDate={startDate}
+          setStartDate={setStartDate}
+          endDate={endDate}
+          setEndDate={setEndDate}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           darkMode={darkMode}
@@ -453,13 +364,22 @@ function App() {
         ) : activeTab === 'dashboard' ? (
           <DashboardView records={filteredRecords} darkMode={darkMode} globalCosts={globalCosts} setGlobalCosts={setGlobalCosts} />
         ) : activeTab === 'summary' ? (
-          <SummaryView records={filteredRecords} darkMode={darkMode} dateRange={dateRange} />
+          <SummaryView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
         ) : activeTab === 'coletas' ? (
-          <ColetaAnalysisView records={filteredRecords} darkMode={darkMode} dateRange={dateRange} />
+          <ColetaAnalysisView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
         ) : activeTab === 'performance' ? (
-          <DriverPerformanceView records={filteredRecords} darkMode={darkMode} dateRange={dateRange} />
+          <DriverPerformanceView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
+        ) : activeTab === 'insights' ? (
+          <InsightsView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
+        ) : activeTab === 'previa' ? (
+          <PreviaView records={records} startDate={startDate} endDate={endDate} darkMode={darkMode} />
         ) : (
-          <InsightsView records={filteredRecords} darkMode={darkMode} dateRange={dateRange} />
+          <ConfigView 
+            config={googleSheetsConfig} 
+            onSave={setGoogleSheetsConfig} 
+            onSync={handleSyncGoogleSheets} 
+            darkMode={darkMode} 
+          />
         )}
 
       </div>

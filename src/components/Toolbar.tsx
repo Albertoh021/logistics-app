@@ -1,15 +1,17 @@
-import { Search, Download, Plus, Upload, Trash2, Sun, Moon } from 'lucide-react';
-import React, { useRef } from 'react';
+import { Search, Plus, Trash2, Sun, Moon } from 'lucide-react';
+
 
 interface ToolbarProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onAddRow: () => void;
-  onExport: () => void;
-  onImport: (file: File) => void;
   onClearAll: () => void;
-  activeTab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance';
-  setActiveTab: (tab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance') => void;
+  startDate: string;
+  setStartDate: (date: string) => void;
+  endDate: string;
+  setEndDate: (date: string) => void;
+  activeTab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa';
+  setActiveTab: (tab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa') => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
 }
@@ -18,26 +20,17 @@ export const Toolbar = ({
   searchQuery, 
   setSearchQuery, 
   onAddRow, 
-  onExport, 
-  onImport,
   onClearAll,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
   activeTab,
   setActiveTab,
   darkMode,
   setDarkMode
 }: ToolbarProps) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onImport(file);
-    }
-    // clear value to allow importing the same file again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   return (
     <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
@@ -83,6 +76,12 @@ export const Toolbar = ({
           >
             Insights <span className="text-[10px] bg-white text-fuchsia-600 px-1.5 py-0.5 rounded-full font-black animate-pulse">IA</span>
           </button>
+          <button
+            onClick={() => setActiveTab('config')}
+            className={`flex-1 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'config' ? (darkMode ? 'bg-slate-600 text-white shadow-sm' : 'bg-slate-600 text-white shadow-sm') : (darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')} flex items-center justify-center`}
+          >
+            Configurações
+          </button>
         </div>
 
         {/* Search Input (Only show if Spreadsheet tab) */}
@@ -114,30 +113,22 @@ export const Toolbar = ({
           {darkMode ? <Sun size={18} /> : <Moon size={18} />}
         </button>
 
-        <input 
-          type="file" 
-          accept=".csv" 
-          ref={fileInputRef} 
-          onChange={handleFileChange}
-          className="hidden" 
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 border rounded-xl transition-colors text-sm font-medium ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-        >
-          <Upload size={18} />
-          <span className="hidden sm:inline">Importar CSV</span>
-        </button>
-
-        {activeTab === 'spreadsheet' && (
-          <button
-            onClick={onExport}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 border rounded-xl transition-colors text-sm font-medium ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-          >
-            <Download size={18} />
-            <span className="hidden sm:inline">Exportar CSV</span>
-          </button>
-        )}
+        {/* Date Filters */}
+        <div className="flex items-center gap-2 mr-2">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className={`px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'}`}
+          />
+          <span className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>até</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className={`px-3 py-2.5 rounded-xl border text-sm font-medium transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500' : 'bg-white border-slate-200 text-slate-900 focus:border-blue-500'}`}
+          />
+        </div>
 
         {activeTab === 'spreadsheet' && (
           <button

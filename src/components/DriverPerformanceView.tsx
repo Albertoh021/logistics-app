@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { LogisticsRecord } from '../types';
 import { Trophy, Search, ChevronDown, ChevronUp, Medal, Target, Truck, AlertTriangle } from 'lucide-react';
 
