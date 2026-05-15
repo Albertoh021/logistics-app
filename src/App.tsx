@@ -12,7 +12,7 @@ import { DriverPerformanceView } from './components/DriverPerformanceView';
 import { ConfigView } from './components/ConfigView';
 import { PreviaView } from './components/PreviaView';
 import { fetchGoogleSheetsData } from './services/googleSheets';
-import { Settings, Receipt, RefreshCw } from 'lucide-react';
+import { Receipt, RefreshCw } from 'lucide-react';
 
 const INITIAL_DATA: LogisticsRecord[] = [];
 

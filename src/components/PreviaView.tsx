@@ -1,7 +1,11 @@
 import { useState, useMemo } from 'react';
 import type { LogisticsRecord } from '../types';
 import { formatCurrency } from '../utils';
-import { Search, User, Calendar, Receipt, Info } from 'lucide-react';
+import { Search, User, Calendar, Receipt, Info, Download, FileArchive } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 interface PreviaViewProps {
   records: LogisticsRecord[];
@@ -14,6 +18,7 @@ interface PreviaViewProps {
 export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateRecord }: PreviaViewProps) => {
   const [selectedMotorista, setSelectedMotorista] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // 1. Filtrar records pelas datas ativas globais
   const recordsInPeriod = useMemo(() => {
@@ -37,25 +42,24 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
 
   // 3. Filtrar pelo motorista selecionado
   const driverRecords = useMemo(() => {
-    if (!selectedMotorista) return [];
+    if (!selectedMotorista || selectedMotorista === 'TODOS OS MOTORISTAS') return [];
     return recordsInPeriod
       .filter(r => r.motorista === selectedMotorista)
       .sort((a, b) => a.data.localeCompare(b.data));
   }, [recordsInPeriod, selectedMotorista]);
 
   // Filtro de busca de motorista
-  const filteredMotoristas = uniqueMotoristas.filter(m => 
+  const filteredMotoristas = ['TODOS OS MOTORISTAS', ...uniqueMotoristas].filter(m => 
     m.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Totais do motorista selecionado (usamos a regra vlrTotal - custoVeiculo para saber o valor a receber líquido dele,
-  // ou somamos os campos de ganho diretamente).
+  // Totais do motorista selecionado
   const totalDiarias = driverRecords.reduce((acc, r) => acc + r.vlrDasDiarias, 0);
   const totalEntregas = driverRecords.reduce((acc, r) => acc + r.vlrEntregas, 0);
   const totalColetas = driverRecords.reduce((acc, r) => acc + r.vlrColetas, 0);
   const totalBonus = driverRecords.reduce((acc, r) => acc + r.bonus, 0);
   const totalSabado = driverRecords.reduce((acc, r) => acc + r.vlrSabado, 0);
-  const totalOutros = driverRecords.reduce((acc, r) => acc + r.outrosValores, 0); // OutrosValores não contém custoVeiculo mais
+  const totalOutros = driverRecords.reduce((acc, r) => acc + r.outrosValores, 0); 
   const totalDescontos = driverRecords.reduce((acc, r) => acc + r.descontos, 0);
   const totalPedagioMudanca = driverRecords.reduce((acc, r) => acc + r.pedagio + r.mudanca, 0);
 
@@ -72,6 +76,120 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
     return `${d}/${m}/${y}`;
   };
 
+  // Resumo para visão "TODOS OS MOTORISTAS"
+  const summaryAll = useMemo(() => {
+    if (selectedMotorista !== 'TODOS OS MOTORISTAS') return [];
+    return uniqueMotoristas.map(m => {
+      const recs = recordsInPeriod.filter(r => r.motorista === m);
+      const dias = recs.length;
+      const recsTotal = recs.reduce((acc, r) => {
+        const d = r.vlrDasDiarias + r.vlrEntregas + r.bonus + r.vlrColetas + r.vlrSabado + r.pedagio + r.mudanca + r.outrosValores - r.descontos;
+        return acc + d;
+      }, 0);
+      return { motorista: m, dias, total: recsTotal };
+    });
+  }, [selectedMotorista, uniqueMotoristas, recordsInPeriod]);
+
+  const totalGeralFolha = summaryAll.reduce((acc, s) => acc + s.total, 0);
+
+  const generatePDF = (motoristaName: string, motoristaRecords: LogisticsRecord[], asBlob = false) => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text('Extrato de Repasse Diario', 14, 20);
+    
+    doc.setFontSize(12);
+    doc.text(`Motorista: ${motoristaName}`, 14, 30);
+    doc.text(`Periodo: ${startDate ? formatDateBR(startDate) : 'Inicio'} ate ${endDate ? formatDateBR(endDate) : 'Hoje'}`, 14, 36);
+
+    const tEntregas = motoristaRecords.reduce((acc, r) => acc + r.vlrEntregas, 0);
+    const tDiarias = motoristaRecords.reduce((acc, r) => acc + r.vlrDasDiarias, 0);
+    const tBonus = motoristaRecords.reduce((acc, r) => acc + r.bonus, 0);
+    const tColetas = motoristaRecords.reduce((acc, r) => acc + r.vlrColetas, 0);
+    const tSabado = motoristaRecords.reduce((acc, r) => acc + r.vlrSabado, 0);
+    const tOutros = motoristaRecords.reduce((acc, r) => acc + r.pedagio + r.mudanca + r.outrosValores, 0);
+    const tDescontos = motoristaRecords.reduce((acc, r) => acc + r.descontos, 0);
+    const tGeral = tDiarias + tEntregas + tBonus + tColetas + tSabado + tOutros - tDescontos;
+
+    const tableData = motoristaRecords.map(r => {
+      const diaPedMudOutros = r.pedagio + r.mudanca + r.outrosValores;
+      const recebivelDia = r.vlrDasDiarias + r.vlrEntregas + r.bonus + r.vlrColetas + r.vlrSabado + diaPedMudOutros - r.descontos;
+      return [
+        formatDateBR(r.data),
+        r.entregas.toString(),
+        formatCurrency(r.vlrEntregas),
+        formatCurrency(r.vlrDasDiarias),
+        formatCurrency(r.bonus),
+        formatCurrency(r.vlrColetas),
+        formatCurrency(r.vlrSabado),
+        formatCurrency(diaPedMudOutros),
+        formatCurrency(r.descontos),
+        formatCurrency(recebivelDia)
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 45,
+      head: [['Data', 'Vol', 'Vlr Ent', 'Diaria', 'Bonus', 'Coletas', 'Sabado', 'Outros', 'Desc.', 'Total']],
+      body: tableData,
+      foot: [[
+        'TOTAIS', 
+        motoristaRecords.reduce((acc, r) => acc + r.entregas, 0).toString(),
+        formatCurrency(tEntregas),
+        formatCurrency(tDiarias),
+        formatCurrency(tBonus),
+        formatCurrency(tColetas),
+        formatCurrency(tSabado),
+        formatCurrency(tOutros),
+        formatCurrency(tDescontos),
+        formatCurrency(tGeral)
+      ]],
+      theme: 'grid',
+      headStyles: { fillColor: [55, 65, 81] }, 
+      footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
+      styles: { fontSize: 8 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFontSize(14);
+    doc.text(`Valor Liquido a Receber: ${formatCurrency(tGeral)}`, 14, finalY);
+
+    if (asBlob) {
+      return doc.output('blob');
+    } else {
+      doc.save(`Extrato_${motoristaName.replace(/\s+/g, '_')}.pdf`);
+    }
+  };
+
+  const handleDownloadSinglePdf = () => {
+    if (!selectedMotorista || selectedMotorista === 'TODOS OS MOTORISTAS') return;
+    generatePDF(selectedMotorista, driverRecords);
+  };
+
+  const handleDownloadAllZip = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const zip = new JSZip();
+      
+      uniqueMotoristas.forEach(m => {
+        const recs = recordsInPeriod.filter(r => r.motorista === m).sort((a, b) => a.data.localeCompare(b.data));
+        if (recs.length > 0) {
+          const blob = generatePDF(m, recs, true);
+          zip.file(`Extrato_${m.replace(/\s+/g, '_')}.pdf`, blob as Blob);
+        }
+      });
+      
+      const content = await zip.generateAsync({ type: 'blob' });
+      const fileName = `Extratos_Todos_Motoristas_${startDate || 'Inicio'}_${endDate || 'Fim'}.zip`;
+      saveAs(content, fileName);
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao gerar o arquivo ZIP com os relatórios.');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
   return (
     <div className={`space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500`}>
       
@@ -83,7 +201,7 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
             Prévia de Repasse
           </h2>
           <p className={`text-sm mt-1 ${textTitle}`}>
-            Selecione um motorista para ver o extrato detalhado diário do período selecionado.
+            Selecione um motorista ou veja o resumo de todos para gerar PDFs de pagamento.
           </p>
         </div>
 
@@ -98,11 +216,10 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
                 ? 'bg-slate-950 border-slate-700 focus:ring-indigo-500 text-white placeholder-slate-500' 
                 : 'bg-slate-50 border-slate-200 focus:ring-indigo-500 text-slate-800 placeholder-slate-400'
             }`}
-            placeholder="Buscar motorista..."
+            placeholder="Buscar motorista ou TODOS..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              // Auto-select if exact match or reset if they start typing
               if (!e.target.value) setSelectedMotorista('');
             }}
           />
@@ -117,14 +234,14 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
                   Nenhum motorista encontrado no período.
                 </div>
               ) : (
-                filteredMotoristas.map(m => (
+                filteredMotoristas.map((m, idx) => (
                   <div
                     key={m}
                     className={`p-3 text-sm cursor-pointer transition-colors border-b last:border-b-0 ${
                       darkMode 
                         ? 'border-slate-700 hover:bg-slate-700 text-slate-200' 
                         : 'border-slate-100 hover:bg-slate-50 text-slate-700'
-                    }`}
+                    } ${idx === 0 && m === 'TODOS OS MOTORISTAS' ? (darkMode ? 'bg-indigo-900/40 text-indigo-300 font-bold' : 'bg-indigo-50 text-indigo-700 font-bold') : ''}`}
                     onClick={() => {
                       setSelectedMotorista(m);
                       setSearchQuery('');
@@ -139,11 +256,63 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
         </div>
       </div>
 
-      {/* Extrato do Motorista */}
-      {selectedMotorista && (
+      {/* Visão de TODOS OS MOTORISTAS */}
+      {selectedMotorista === 'TODOS OS MOTORISTAS' && (
+        <div className="space-y-6">
+          <div className={`p-6 rounded-2xl border flex flex-col md:flex-row gap-6 md:items-center justify-between shadow-sm ${panelBg}`}>
+             <div>
+                <h3 className={`text-2xl font-black mb-1 ${textValue}`}>Resumo da Frota</h3>
+                <p className={`text-sm ${textTitle}`}>Total a repassar para {summaryAll.length} motoristas.</p>
+             </div>
+             <div className="flex flex-col md:flex-row items-center gap-6">
+                <div className="text-right">
+                   <p className={`text-xs uppercase font-bold mb-1 ${textTitle}`}>Total Geral da Folha</p>
+                   <p className={`text-3xl font-black ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatCurrency(totalGeralFolha)}</p>
+                </div>
+                <button 
+                  onClick={handleDownloadAllZip}
+                  disabled={isGeneratingPdf}
+                  className={`flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold transition-all shadow-md text-white disabled:opacity-50 ${
+                    darkMode ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  <FileArchive size={20} className={isGeneratingPdf ? 'animate-bounce' : ''} />
+                  {isGeneratingPdf ? 'Gerando ZIP...' : 'Baixar PDFs (ZIP)'}
+                </button>
+             </div>
+          </div>
+
+          <div className={`rounded-2xl border shadow-sm overflow-hidden ${panelBg}`}>
+             <div className="overflow-x-auto">
+               <table className="w-full text-left whitespace-nowrap text-sm">
+                  <thead className={`text-[11px] uppercase font-bold tracking-wider ${darkMode ? 'bg-slate-800/50 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                    <tr>
+                      <th className="p-4 pl-6">Motorista</th>
+                      <th className="p-4 text-center">Dias Trabalhados</th>
+                      <th className="p-4 pr-6 text-right">Valor a Receber</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${darkMode ? 'divide-slate-800/50' : 'divide-slate-100'}`}>
+                    {summaryAll.map((s, idx) => (
+                      <tr key={idx} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
+                        <td className={`p-4 pl-6 font-bold ${textValue}`}>{s.motorista}</td>
+                        <td className={`p-4 text-center ${textTitle}`}>{s.dias} dias</td>
+                        <td className={`p-4 pr-6 text-right font-black ${s.total >= 0 ? (darkMode ? 'text-emerald-400' : 'text-emerald-600') : (darkMode ? 'text-red-400' : 'text-red-500')}`}>
+                          {formatCurrency(s.total)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+               </table>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extrato de Motorista Específico */}
+      {selectedMotorista && selectedMotorista !== 'TODOS OS MOTORISTAS' && (
         <div className="space-y-6">
           
-          {/* Resumo do Repasse */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className={`md:col-span-2 p-6 rounded-2xl border flex flex-col justify-center shadow-sm relative overflow-hidden ${panelBg}`}>
               <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -172,24 +341,34 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
                 ? 'bg-gradient-to-br from-indigo-900/40 to-slate-900 border-indigo-500/30' 
                 : 'bg-gradient-to-br from-indigo-50 to-white border-indigo-200'
             }`}>
-              <div className="relative z-10">
-                <p className={`text-sm font-bold uppercase tracking-wider mb-2 ${
-                  darkMode ? 'text-indigo-300' : 'text-indigo-600'
-                }`}>
-                  Valor Líquido a Receber
-                </p>
-                <h3 className={`text-4xl font-black ${
-                  valorTotalAReceber >= 0 
-                    ? (darkMode ? 'text-emerald-400' : 'text-emerald-600') 
-                    : (darkMode ? 'text-red-400' : 'text-red-600')
-                }`}>
-                  {formatCurrency(valorTotalAReceber)}
-                </h3>
+              <div className="relative z-10 flex flex-col h-full justify-between">
+                <div>
+                  <p className={`text-sm font-bold uppercase tracking-wider mb-2 ${
+                    darkMode ? 'text-indigo-300' : 'text-indigo-600'
+                  }`}>
+                    Valor Líquido a Receber
+                  </p>
+                  <h3 className={`text-4xl font-black ${
+                    valorTotalAReceber >= 0 
+                      ? (darkMode ? 'text-emerald-400' : 'text-emerald-600') 
+                      : (darkMode ? 'text-red-400' : 'text-red-600')
+                  }`}>
+                    {formatCurrency(valorTotalAReceber)}
+                  </h3>
+                </div>
+                <button 
+                  onClick={handleDownloadSinglePdf}
+                  className={`mt-6 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md text-white ${
+                    darkMode ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  <Download size={16} />
+                  Baixar PDF do Extrato
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Tabela Diária */}
           <div className={`rounded-2xl border shadow-sm overflow-hidden ${panelBg}`}>
             <div className={`p-4 border-b flex items-center justify-between ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-100 bg-slate-50'}`}>
               <h3 className={`font-semibold flex items-center gap-2 ${textValue}`}>
@@ -202,7 +381,7 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
                   darkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
                 }`}
               >
-                Trocar Motorista
+                Limpar Busca
               </button>
             </div>
             
@@ -227,7 +406,6 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
                 <tbody className={`divide-y ${darkMode ? 'divide-slate-800/50' : 'divide-slate-100'}`}>
                   {driverRecords.map((r, idx) => {
                     const diaPedMudOutros = r.pedagio + r.mudanca + r.outrosValores;
-                    // O custo veículo não entra aqui porque é custo da empresa.
                     const recebivelDia = r.vlrDasDiarias + r.vlrEntregas + r.bonus + r.vlrColetas + r.vlrSabado + diaPedMudOutros - r.descontos;
                     
                     const inputClass = `w-20 bg-transparent border border-transparent hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded px-2 py-1 outline-none text-right transition-all ${darkMode ? 'text-slate-200 hover:border-slate-600' : 'text-slate-700'}`;
@@ -279,7 +457,6 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
               </table>
             </div>
           </div>
-          
         </div>
       )}
 
@@ -290,10 +467,8 @@ export const PreviaView = ({ records, startDate, endDate, darkMode, onUpdateReco
           <div>
             <h4 className="font-bold mb-1">Como funciona a Prévia?</h4>
             <p className="text-sm opacity-90 leading-relaxed">
-              Esta tela não aplica agrupamentos ou filtros de colunas da aba Planilha. Ela exibe exatamente 
-              os dias informados nos relatórios originais dentro do intervalo de datas selecionado no topo da página. 
-              Os Custos Operacionais da Empresa (como aluguel de veículo, seguro e combustível) <strong>não são descontados</strong> aqui, 
-              pois esta visão é exclusiva para consultar o valor líquido a ser repassado para o portador.
+              Pesquise por "TODOS" para ver o resumo completo ou selecione um motorista específico para ver o extrato detalhado.
+              Você pode gerar relatórios em PDF de qualidade profissional para facilitar os pagamentos.
             </p>
           </div>
         </div>
