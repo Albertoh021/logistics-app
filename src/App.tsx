@@ -13,6 +13,7 @@ import { ConfigView } from './components/ConfigView';
 import { PreviaView } from './components/PreviaView';
 import { fetchGoogleSheetsData } from './services/googleSheets';
 import { Receipt, RefreshCw } from 'lucide-react';
+import localforage from 'localforage';
 
 const INITIAL_DATA: LogisticsRecord[] = [];
 
@@ -43,17 +44,31 @@ function App() {
     };
   });
   
-  const [records, setRecords] = useState<LogisticsRecord[]>(() => {
-    const saved = localStorage.getItem('logistics_records_v2');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_DATA;
+  const [records, setRecords] = useState<LogisticsRecord[]>(INITIAL_DATA);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Load from localforage (or migrate from localStorage)
+  useEffect(() => {
+    localforage.getItem<LogisticsRecord[]>('logistics_records_v2').then((saved) => {
+      if (saved && saved.length > 0) {
+        setRecords(saved);
+        setIsInitialLoad(false);
+      } else {
+        const oldSaved = localStorage.getItem('logistics_records_v2');
+        if (oldSaved) {
+          try {
+            const parsed = JSON.parse(oldSaved);
+            setRecords(parsed);
+            localforage.setItem('logistics_records_v2', parsed);
+            localStorage.removeItem('logistics_records_v2'); // Free quota!
+          } catch (e) {
+            console.error(e);
+          }
+        }
+        setIsInitialLoad(false);
       }
-    }
-    return INITIAL_DATA;
-  });
+    }).catch(() => setIsInitialLoad(false));
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [columnFilters, setColumnFilters] = useState<Partial<Record<keyof LogisticsRecord, string[]>>>({});
@@ -81,10 +96,12 @@ function App() {
     }
   }, [darkMode]);
 
-  // Persist to localStorage whenever records change
+  // Persist to localforage whenever records change
   useEffect(() => {
-    localStorage.setItem('logistics_records_v2', JSON.stringify(records));
-  }, [records]);
+    if (!isInitialLoad) {
+      localforage.setItem('logistics_records_v2', records).catch(e => console.error(e));
+    }
+  }, [records, isInitialLoad]);
 
   // Persist dates
   useEffect(() => {
