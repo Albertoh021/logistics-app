@@ -11,6 +11,7 @@ import { InsightsView } from './components/InsightsView';
 import { DriverPerformanceView } from './components/DriverPerformanceView';
 import { ConfigView } from './components/ConfigView';
 import { PreviaView } from './components/PreviaView';
+import { SlaRegionView } from './components/SlaRegionView';
 import { fetchGoogleSheetsData } from './services/googleSheets';
 import { Receipt, RefreshCw } from 'lucide-react';
 import localforage from 'localforage';
@@ -25,7 +26,7 @@ const INITIAL_COSTS: GlobalCosts = {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa'>('spreadsheet');
+  const [activeTab, setActiveTab] = useState<'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa' | 'sla'>('spreadsheet');
   const [isSyncing, setIsSyncing] = useState(false);
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
   const [startDate, setStartDate] = useState(() => localStorage.getItem('logistics_start_date') || '');
@@ -397,6 +398,8 @@ function App() {
           <InsightsView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
         ) : activeTab === 'previa' ? (
           <PreviaView records={records} startDate={startDate} endDate={endDate} darkMode={darkMode} onUpdateRecord={updateRecord} />
+        ) : activeTab === 'sla' ? (
+          <SlaRegionView records={filteredRecords} darkMode={darkMode} dateRange={`${startDate} - ${endDate}`} />
         ) : (
           <ConfigView 
             config={googleSheetsConfig} 

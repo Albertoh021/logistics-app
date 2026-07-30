@@ -10,8 +10,8 @@ interface ToolbarProps {
   setStartDate: (date: string) => void;
   endDate: string;
   setEndDate: (date: string) => void;
-  activeTab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa';
-  setActiveTab: (tab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa') => void;
+  activeTab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa' | 'sla';
+  setActiveTab: (tab: 'spreadsheet' | 'dashboard' | 'summary' | 'coletas' | 'insights' | 'performance' | 'config' | 'previa' | 'sla') => void;
   darkMode: boolean;
   setDarkMode: (value: boolean) => void;
 }
@@ -63,6 +63,12 @@ export const Toolbar = ({
             className={`flex-1 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'coletas' ? (darkMode ? 'bg-amber-600 text-white shadow-sm' : 'bg-white text-amber-600 shadow-sm') : (darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')}`}
           >
             Coletas
+          </button>
+          <button
+            onClick={() => setActiveTab('sla')}
+            className={`flex-1 sm:px-4 py-2 rounded-lg text-sm font-semibold transition-all ${activeTab === 'sla' ? (darkMode ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white text-indigo-600 shadow-sm') : (darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900')}`}
+          >
+            SLA Região
           </button>
           <button
             onClick={() => setActiveTab('performance')}
