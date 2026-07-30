@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
-import { Target, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Target, TrendingUp, TrendingDown, CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import type { LogisticsRecord } from '../types';
 
 interface SlaRegionViewProps {
@@ -36,7 +35,8 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
       };
     });
 
-    return formatted.sort((a, b) => b.sla - a.sla); // sort by SLA descending
+    // Ordenar do pior para o melhor SLA para chamar atenção aos problemas primeiro na TV
+    return formatted.sort((a, b) => a.sla - b.sla); 
   }, [records]);
 
   const globalEntregas = regionStats.reduce((sum, item) => sum + item.entregas, 0);
@@ -44,143 +44,87 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
   const globalTotal = globalEntregas + globalInsucessos;
   const globalSla = globalTotal > 0 ? (globalEntregas / globalTotal) * 100 : 0;
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className={`p-4 rounded-xl shadow-lg border ${darkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}>
-          <p className="font-bold text-lg mb-2">{label}</p>
-          <div className="space-y-1">
-            <p className="flex justify-between gap-4">
-              <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>SLA:</span>
-              <span className="font-semibold">{payload[0].value}%</span>
-            </p>
-            <p className="flex justify-between gap-4">
-              <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Entregas:</span>
-              <span className="font-semibold text-emerald-500">{payload[0].payload.entregas}</span>
-            </p>
-            <p className="flex justify-between gap-4">
-              <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Insucessos:</span>
-              <span className="font-semibold text-rose-500">{payload[0].payload.insucessos}</span>
-            </p>
-            <p className="flex justify-between gap-4 pt-1 border-t border-slate-700/50 mt-1">
-              <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>Total:</span>
-              <span className="font-semibold">{payload[0].payload.total}</span>
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
+  const getStatusColor = (sla: number) => {
+    if (sla >= 95) return darkMode ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-emerald-50 border-emerald-400 text-emerald-700';
+    if (sla >= 90) return darkMode ? 'bg-amber-900/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-400 text-amber-700';
+    return darkMode ? 'bg-rose-900/20 border-rose-500/50 text-rose-400' : 'bg-rose-50 border-rose-400 text-rose-700';
   };
 
-  const getSlaColor = (sla: number) => {
-    if (sla >= 98) return darkMode ? '#10b981' : '#059669'; // Emerald
-    if (sla >= 95) return darkMode ? '#f59e0b' : '#d97706'; // Amber
-    return darkMode ? '#ef4444' : '#dc2626'; // Rose
+  const getStatusIcon = (sla: number) => {
+    if (sla >= 95) return <CheckCircle2 className="w-8 h-8 opacity-75" />;
+    if (sla >= 90) return <AlertTriangle className="w-8 h-8 opacity-75" />;
+    return <AlertOctagon className="w-8 h-8 opacity-75 animate-pulse" />;
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className={`text-2xl font-bold flex items-center gap-2 ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-            <Target className={darkMode ? 'text-indigo-400' : 'text-indigo-600'} />
-            SLA por Região
+    <div className="space-y-8 flex flex-col h-full pb-10">
+      {/* Header TV-friendly */}
+      <div className={`p-6 rounded-3xl border shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="text-center md:text-left">
+          <h2 className={`text-4xl md:text-5xl font-black flex items-center justify-center md:justify-start gap-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+            <Target className={`w-12 h-12 ${darkMode ? 'text-indigo-500' : 'text-indigo-600'}`} />
+            Monitoramento de SLA
           </h2>
-          <p className={darkMode ? 'text-slate-400' : 'text-slate-500'}>
-            Análise de entregas vs insucessos ({dateRange})
+          <p className={`text-xl mt-3 font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            {dateRange} • Visão Painel (Galpão)
           </p>
         </div>
-        <div className={`px-6 py-3 rounded-xl border flex flex-col items-end shadow-sm ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-          <span className={`text-sm font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>SLA Global</span>
-          <span className={`text-3xl font-black ${globalSla >= 95 ? 'text-emerald-500' : 'text-rose-500'}`}>
-            {globalSla.toFixed(2)}%
-          </span>
+        
+        <div className={`px-8 py-5 rounded-3xl flex items-center gap-6 shadow-inner ${
+          globalSla >= 95 
+            ? (darkMode ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300')
+            : globalSla >= 90 
+              ? (darkMode ? 'bg-amber-900/40 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300')
+              : (darkMode ? 'bg-rose-900/40 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-800 border border-rose-300')
+        }`}>
+          <div className="text-right">
+            <span className="block text-sm font-black uppercase tracking-widest opacity-80 mb-1">Global da Frota</span>
+            <span className="text-6xl font-black tracking-tighter">{globalSla.toFixed(1)}%</span>
+          </div>
+          {globalSla >= 95 ? <TrendingUp className="w-16 h-16 opacity-80" /> : <TrendingDown className="w-16 h-16 opacity-80" />}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Gráfico */}
-        <div className={`lg:col-span-2 p-6 rounded-2xl border shadow-sm flex flex-col ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-          <h3 className={`text-lg font-semibold mb-6 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Desempenho Regional (SLA %)</h3>
-          <div className="h-[450px] w-full">
-            {regionStats.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={regionStats} margin={{ top: 20, right: 30, left: 0, bottom: 70 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#334155' : '#e2e8f0'} vertical={false} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke={darkMode ? '#94a3b8' : '#64748b'} 
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis 
-                    domain={[0, 100]} 
-                    stroke={darkMode ? '#94a3b8' : '#64748b'}
-                    tickFormatter={(val) => `${val}%`}
-                  />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: darkMode ? '#334155' : '#f1f5f9', opacity: 0.4 }} />
-                  <ReferenceLine y={95} stroke="#f59e0b" strokeDasharray="3 3" label={{ position: 'insideBottomRight', value: 'Meta (95%)', fill: '#f59e0b', fontSize: 12, offset: 10 }} />
-                  <Bar dataKey="sla" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                    {regionStats.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={getSlaColor(entry.sla)} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className={`h-full flex items-center justify-center ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                Não há dados suficientes para gerar o gráfico.
+      {/* Grid de Regiões para TV */}
+      {regionStats.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 auto-rows-fr">
+          {regionStats.map((region, idx) => (
+            <div 
+              key={idx} 
+              className={`p-6 rounded-3xl border-2 flex flex-col justify-between transition-all duration-500 transform shadow-md ${getStatusColor(region.sla)}`}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-2xl font-bold leading-tight break-words max-w-[75%] uppercase tracking-wide">
+                  {region.name}
+                </h3>
+                {getStatusIcon(region.sla)}
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Tabela de Dados */}
-        <div className={`p-6 rounded-2xl border shadow-sm overflow-hidden flex flex-col h-[530px] ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-          <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>Detalhamento ({regionStats.length} Regiões)</h3>
-          <div className="overflow-y-auto flex-1 pr-2 space-y-3 custom-scrollbar">
-            {regionStats.map((region, idx) => (
-              <div key={idx} className={`p-4 rounded-xl border flex flex-col gap-2 transition-all hover:scale-[1.02] ${darkMode ? 'bg-slate-800 border-slate-700 hover:border-slate-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                <div className="flex justify-between items-center">
-                  <span className={`font-bold truncate max-w-[65%] ${darkMode ? 'text-slate-200' : 'text-slate-800'}`} title={region.name}>
-                    {region.name}
-                  </span>
-                  <span className={`px-2.5 py-1 rounded-md text-sm font-bold flex items-center gap-1 shrink-0 ${
-                    region.sla >= 95 
-                      ? (darkMode ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-100 text-emerald-700')
-                      : (darkMode ? 'bg-rose-900/40 text-rose-400' : 'bg-rose-100 text-rose-700')
-                  }`}>
-                    {region.sla >= 95 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-                    {region.sla}%
-                  </span>
+              
+              <div className="my-6 flex flex-col items-center justify-center">
+                <span className="text-7xl font-black tracking-tighter drop-shadow-sm">
+                  {region.sla.toFixed(0)}<span className="text-4xl">%</span>
+                </span>
+              </div>
+              
+              <div className={`grid grid-cols-2 gap-4 p-4 rounded-2xl ${darkMode ? 'bg-black/20' : 'bg-white/60 backdrop-blur-md'}`}>
+                <div className="flex flex-col items-center justify-center text-center">
+                  <span className="text-xs font-bold uppercase opacity-70 mb-1">Sucesso</span>
+                  <span className="text-3xl font-black">{region.entregas}</span>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-sm mt-1">
-                  <div className={`p-2 rounded-lg ${darkMode ? 'bg-slate-900' : 'bg-white'} flex flex-col items-center justify-center text-center`}>
-                    <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Entregas</span>
-                    <span className="font-semibold text-emerald-500 text-base">{region.entregas}</span>
-                  </div>
-                  <div className={`p-2 rounded-lg ${darkMode ? 'bg-slate-900' : 'bg-white'} flex flex-col items-center justify-center text-center`}>
-                    <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Insucessos</span>
-                    <span className="font-semibold text-rose-500 text-base">{region.insucessos}</span>
-                  </div>
+                <div className="flex flex-col items-center justify-center text-center border-l-2 border-current border-opacity-20 pl-2">
+                  <span className="text-xs font-bold uppercase opacity-70 mb-1">Falha</span>
+                  <span className="text-3xl font-black">{region.insucessos}</span>
                 </div>
               </div>
-            ))}
-            
-            {regionStats.length === 0 && (
-              <div className={`text-center py-10 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
-                Nenhum dado encontrado para o período.
-              </div>
-            )}
-          </div>
+            </div>
+          ))}
         </div>
-        
-      </div>
+      ) : (
+        <div className={`flex-1 flex flex-col items-center justify-center p-20 rounded-3xl border-4 border-dashed ${darkMode ? 'border-slate-800 text-slate-600' : 'border-slate-200 text-slate-400'}`}>
+          <Target className="w-32 h-32 mb-8 opacity-20" />
+          <p className="text-3xl font-bold">Nenhum dado encontrado para o período selecionado.</p>
+        </div>
+      )}
     </div>
   );
 };
