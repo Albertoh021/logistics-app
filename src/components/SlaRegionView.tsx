@@ -57,20 +57,20 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
   };
 
   return (
-    <div className="space-y-8 flex flex-col h-full pb-10">
+    <div className="space-y-4 flex flex-col h-full">
       {/* Header TV-friendly */}
-      <div className={`p-6 rounded-3xl border shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+      <div className={`p-4 rounded-2xl border shadow-lg flex flex-col md:flex-row justify-between items-center gap-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
         <div className="text-center md:text-left">
-          <h2 className={`text-4xl md:text-5xl font-black flex items-center justify-center md:justify-start gap-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
-            <Target className={`w-12 h-12 ${darkMode ? 'text-indigo-500' : 'text-indigo-600'}`} />
+          <h2 className={`text-3xl md:text-4xl font-black flex items-center justify-center md:justify-start gap-3 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+            <Target className={`w-10 h-10 ${darkMode ? 'text-indigo-500' : 'text-indigo-600'}`} />
             Monitoramento de SLA
           </h2>
-          <p className={`text-xl mt-3 font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          <p className={`text-lg mt-1 font-medium ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
             {dateRange} • Visão Painel (Galpão)
           </p>
         </div>
         
-        <div className={`px-8 py-5 rounded-3xl flex items-center gap-6 shadow-inner ${
+        <div className={`px-6 py-3 rounded-2xl flex items-center gap-4 shadow-inner ${
           globalSla >= 97.5 
             ? (darkMode ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300')
             : globalSla >= 90 
@@ -78,42 +78,44 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
               : (darkMode ? 'bg-rose-900/40 text-rose-400 border border-rose-500/30' : 'bg-rose-100 text-rose-800 border border-rose-300')
         }`}>
           <div className="text-right">
-            <span className="block text-sm font-black uppercase tracking-widest opacity-80 mb-1">Global da Frota</span>
-            <span className="text-6xl font-black tracking-tighter">{globalSla.toFixed(1)}%</span>
+            <span className="block text-xs font-black uppercase tracking-widest opacity-80 mb-0.5">Global da Frota</span>
+            <span className="text-4xl md:text-5xl font-black tracking-tighter">{globalSla.toFixed(1)}%</span>
           </div>
-          {globalSla >= 97.5 ? <TrendingUp className="w-16 h-16 opacity-80" /> : <TrendingDown className="w-16 h-16 opacity-80" />}
+          {globalSla >= 97.5 ? <TrendingUp className="w-12 h-12 opacity-80" /> : <TrendingDown className="w-12 h-12 opacity-80" />}
         </div>
       </div>
 
       {/* Grid de Regiões para TV */}
       {regionStats.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 auto-rows-fr">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 lg:gap-4 auto-rows-fr">
           {regionStats.map((region, idx) => (
             <div 
               key={idx} 
-              className={`p-6 rounded-3xl border-2 flex flex-col justify-between transition-all duration-500 transform shadow-md ${getStatusColor(region.sla)}`}
+              className={`p-4 rounded-2xl border-2 flex flex-col justify-between transition-all duration-500 transform shadow-md ${getStatusColor(region.sla)}`}
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-2xl font-bold leading-tight break-words max-w-[75%] uppercase tracking-wide">
+              <div className="flex justify-between items-start mb-2">
+                <h3 className="text-xl font-bold leading-tight break-words max-w-[75%] uppercase tracking-wide">
                   {region.name}
                 </h3>
-                {getStatusIcon(region.sla)}
+                <div className="scale-75 origin-top-right">
+                  {getStatusIcon(region.sla)}
+                </div>
               </div>
               
-              <div className="my-6 flex flex-col items-center justify-center">
-                <span className="text-7xl font-black tracking-tighter drop-shadow-sm">
-                  {region.sla.toFixed(0)}<span className="text-4xl">%</span>
+              <div className="my-2 flex flex-col items-center justify-center">
+                <span className="text-5xl font-black tracking-tighter drop-shadow-sm">
+                  {region.sla.toFixed(0)}<span className="text-2xl">%</span>
                 </span>
               </div>
               
-              <div className={`grid grid-cols-2 gap-4 p-4 rounded-2xl ${darkMode ? 'bg-black/20' : 'bg-white/60 backdrop-blur-md'}`}>
+              <div className={`grid grid-cols-2 gap-2 p-2 rounded-xl ${darkMode ? 'bg-black/20' : 'bg-white/60 backdrop-blur-md'}`}>
                 <div className="flex flex-col items-center justify-center text-center">
-                  <span className="text-xs font-bold uppercase opacity-70 mb-1">Sucesso</span>
-                  <span className="text-3xl font-black">{region.entregas}</span>
+                  <span className="text-[10px] font-bold uppercase opacity-70 mb-0.5">Sucesso</span>
+                  <span className="text-xl font-black">{region.entregas}</span>
                 </div>
-                <div className="flex flex-col items-center justify-center text-center border-l-2 border-current border-opacity-20 pl-2">
-                  <span className="text-xs font-bold uppercase opacity-70 mb-1">Falha</span>
-                  <span className="text-3xl font-black">{region.insucessos}</span>
+                <div className="flex flex-col items-center justify-center text-center border-l-2 border-current border-opacity-20 pl-1">
+                  <span className="text-[10px] font-bold uppercase opacity-70 mb-0.5">Falha</span>
+                  <span className="text-xl font-black">{region.insucessos}</span>
                 </div>
               </div>
             </div>
