@@ -45,13 +45,13 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
   const globalSla = globalTotal > 0 ? (globalEntregas / globalTotal) * 100 : 0;
 
   const getStatusColor = (sla: number) => {
-    if (sla >= 95) return darkMode ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-emerald-50 border-emerald-400 text-emerald-700';
+    if (sla >= 97.5) return darkMode ? 'bg-emerald-900/20 border-emerald-500/50 text-emerald-400' : 'bg-emerald-50 border-emerald-400 text-emerald-700';
     if (sla >= 90) return darkMode ? 'bg-amber-900/20 border-amber-500/50 text-amber-400' : 'bg-amber-50 border-amber-400 text-amber-700';
     return darkMode ? 'bg-rose-900/20 border-rose-500/50 text-rose-400' : 'bg-rose-50 border-rose-400 text-rose-700';
   };
 
   const getStatusIcon = (sla: number) => {
-    if (sla >= 95) return <CheckCircle2 className="w-8 h-8 opacity-75" />;
+    if (sla >= 97.5) return <CheckCircle2 className="w-8 h-8 opacity-75" />;
     if (sla >= 90) return <AlertTriangle className="w-8 h-8 opacity-75" />;
     return <AlertOctagon className="w-8 h-8 opacity-75 animate-pulse" />;
   };
@@ -71,7 +71,7 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
         </div>
         
         <div className={`px-8 py-5 rounded-3xl flex items-center gap-6 shadow-inner ${
-          globalSla >= 95 
+          globalSla >= 97.5 
             ? (darkMode ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300')
             : globalSla >= 90 
               ? (darkMode ? 'bg-amber-900/40 text-amber-400 border border-amber-500/30' : 'bg-amber-100 text-amber-800 border border-amber-300')
@@ -81,7 +81,7 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
             <span className="block text-sm font-black uppercase tracking-widest opacity-80 mb-1">Global da Frota</span>
             <span className="text-6xl font-black tracking-tighter">{globalSla.toFixed(1)}%</span>
           </div>
-          {globalSla >= 95 ? <TrendingUp className="w-16 h-16 opacity-80" /> : <TrendingDown className="w-16 h-16 opacity-80" />}
+          {globalSla >= 97.5 ? <TrendingUp className="w-16 h-16 opacity-80" /> : <TrendingDown className="w-16 h-16 opacity-80" />}
         </div>
       </div>
 
