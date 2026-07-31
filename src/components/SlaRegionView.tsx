@@ -104,7 +104,7 @@ export const SlaRegionView: React.FC<SlaRegionViewProps> = ({ records, darkMode,
               
               <div className="my-2 flex flex-col items-center justify-center">
                 <span className="text-5xl font-black tracking-tighter drop-shadow-sm">
-                  {region.sla.toFixed(0)}<span className="text-2xl">%</span>
+                  {region.sla.toFixed(1)}<span className="text-2xl">%</span>
                 </span>
               </div>
               
